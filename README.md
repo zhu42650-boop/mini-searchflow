@@ -59,10 +59,6 @@ export TAVILY_API_KEY="your_tavily_key"
 python runflow.py
 ```
 
-Human Feedback 交互：
-- 输入 `[ACCEPTED]` 继续执行
-- 输入 `[EDIT_PLAN] ...` 让 decomposer 重新拆分
-
 报告输出：`outputs/report_YYYYMMDD_HHMMSS.md`
 
 ## Configuration
@@ -79,5 +75,3 @@ Human Feedback 交互：
 - **多轮对话记忆** 与 **用户偏好建模**
 - **UI/可视化面板**（研究任务进度、证据链追踪）
 
-## License
-MIT
