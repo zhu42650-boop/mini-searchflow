@@ -380,5 +380,6 @@ Structure your report in the following format:
 - PRIORITIZE USING MARKDOWN TABLES for data presentation and comparison. Use tables whenever presenting comparative data, statistics, features, or options.
 - Include images using `![Image Description](image_url)`. The images should be in the middle of the report, not at the end or separate section.
 - The included images should **only** be from the information gathered **from the previous steps**. **Never** include images that are not from the previous steps
+- Never use placeholder or guessed image URLs (e.g. `example.com`, `placeholder.com`, generic `image.jpg`). If no verifiable image URL exists, omit images.
 - Directly output the Markdown raw content without "```markdown" or "```".
 - Always use the language specified by the locale = **{{ locale }}**.

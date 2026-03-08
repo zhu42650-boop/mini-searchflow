@@ -28,6 +28,7 @@ class Configuration:
     max_new_question_round: int = 3
 
     max_search_results: int =3
+    researcher_recursion_limit: int = 12
 
 
     # Tooling / behavior toggles

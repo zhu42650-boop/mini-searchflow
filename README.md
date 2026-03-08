@@ -2,6 +2,13 @@
 
 Mini-SearchFlow 是一个基于 LangGraph/LangChain 的多智能体 Deep Research 工作流原型，参考 deer-flow 的结构，并在流程上做了简化和改造，适合用于研究型问答、资料汇总与报告生成。
 
+## Demo Screenshots
+### 前端工作台
+![Mini-SearchFlow 前端工作台](images/search_flow.png)
+
+### 报告展示
+![Mini-SearchFlow 报告页面](images/report.png)
+
 ## Features
 - **模块化工作流**：Coordinator → Background Investigator → Question Decomposer → Human Feedback → Research Team → Reporter
 - **可交互的 Human Feedback**：支持 `interrupt/resume`，对拆分子问题进行人工审阅与修订
@@ -31,8 +38,10 @@ mini-searchflow/
   rag/              # RAG 组件与向量库接口
   tools/            # 搜索、爬虫、RAG、Python REPL
   utils/            # 通用工具
+  web/              # 轻量前端页面（HTML/CSS/JS）
   outputs/          # 报告输出目录
   runflow.py        # 交互运行入口
+  server.py         # FastAPI + SSE 服务入口
 ```
 
 ## Quick Start
@@ -60,6 +69,15 @@ python runflow.py
 ```
 
 报告输出：`outputs/report_YYYYMMDD_HHMMSS.md`
+
+### 4) 启动 API + 前端（推荐演示）
+```bash
+uvicorn server:app --reload --host 0.0.0.0 --port 8000
+```
+
+浏览器访问：
+- `http://localhost:8000/`（内置简洁前端）
+- `POST /api/chat/stream`（SSE 流式接口）
 
 ## Configuration
 - `config/configuration.py`：运行时可配置参数（最大拆分次数、子问题数量、搜索策略等）

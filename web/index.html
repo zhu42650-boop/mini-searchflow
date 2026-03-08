@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini SearchFlow</title>
+    <link rel="stylesheet" href="/web/style.css" />
+  </head>
+  <body>
+    <div class="app-bg"></div>
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo-dot"></div>
+        <div>
+          <h1>Mini SearchFlow</h1>
+          <p>Deep Research Workspace</p>
+        </div>
+      </div>
+      <div id="status" class="status idle">待命</div>
+    </header>
+
+    <main class="layout">
+      <section class="panel conversation">
+        <div class="panel-head">
+          <h2>对话与过程</h2>
+          <button id="clear-btn" class="text-btn">新会话</button>
+        </div>
+
+        <div id="messages" class="messages"></div>
+
+        <div id="interrupt-box" class="interrupt hidden">
+          <div class="interrupt-title">需要人工反馈</div>
+          <div id="interrupt-text" class="interrupt-text"></div>
+          <div class="interrupt-actions">
+            <button id="accept-btn">接受并继续</button>
+            <button id="edit-btn" class="secondary">编辑子问题</button>
+          </div>
+          <textarea id="edit-input" class="hidden" rows="3" placeholder="输入修改意见（例如：先调研官方数据源，再做分析）..."></textarea>
+          <button id="submit-edit" class="hidden">提交编辑反馈</button>
+        </div>
+
+        <div class="composer-wrap">
+          <textarea id="question" rows="4" placeholder="输入你的研究问题..."></textarea>
+          <div class="composer-actions">
+            <button id="send-btn">开始研究</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel research">
+        <div class="panel-head">
+          <h2>研究面板</h2>
+        </div>
+
+        <div class="card">
+          <div class="card-title">任务进度</div>
+          <ul id="subquestions" class="timeline"></ul>
+        </div>
+
+        <div class="card report-card">
+          <div class="card-title">最终报告</div>
+          <div id="report-file-empty" class="report-empty">报告生成后会出现在这里</div>
+          <div id="report-files" class="report-files"></div>
+        </div>
+      </section>
+    </main>
+
+    <script src="/web/app.js"></script>
+  </body>
+</html>

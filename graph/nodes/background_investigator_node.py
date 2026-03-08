@@ -66,6 +66,8 @@ def background_investigation_node(state: State, config: RunnableConfig):
             configurable.max_search_results
         ).invoke(query)
     
+    print(background_investigation_results)
+    
     return {
         "background_investigation_results": json.dumps(
             background_investigation_results, ensure_ascii = False

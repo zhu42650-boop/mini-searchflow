@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
 
 def research_team_node(
     state: State,
-) -> Command[Literal["researcher", "analyst", "coder", "question_decomposer"]]:
+) -> Command[Literal["researcher", "analyst", "reporter"]]:
     """Route to the next agent based on unfinished sub-questions."""
     logger.info("Research team is collaborating on tasks")
     logger.debug("Entering research_team_node - coordinating agents")
@@ -46,7 +46,7 @@ def research_team_node(
             if question.step_type == "analysis":
                 return Command(update=preserve_state_meta_fields(state), goto="analyst")
             if question.step_type == "processing":
-                return Command(update=preserve_state_meta_fields(state), goto="coder")
+                return Command(update=preserve_state_meta_fields(state), goto="analyst")
 
     return Command(update=preserve_state_meta_fields(state), goto="reporter")
 
@@ -140,6 +140,16 @@ async def _handle_recursion_limit_fallback(
         SystemMessage(content=limit_prompt)
     ]
 
+    # Aggressive compression for fallback context to avoid token overflow
+    llm_token_limit = get_llm_token_limit_by_type(AGENT_LLM_MAP[agent_name])
+    if llm_token_limit:
+        context_manager = ContextManager(llm_token_limit, preserve_prefix_message_count=3)
+        fallback_messages = context_manager.enforce_token_budget(
+            fallback_messages,
+            hard_limit=min(int(llm_token_limit * 0.6), 80000),
+            max_message_chars=10000,
+        )
+
     # Get the LLM without tools (strip all tools from binding)
     fallback_llm = get_llm_by_type(AGENT_LLM_MAP[agent_name])
 
@@ -211,13 +221,16 @@ async def _execute_agent_step(
     )
     logger.debug(f"[_execute_agent_step] Completed steps so far: {len(completed_questions)}")
 
-    # Format completed steps information
+    # Format completed steps information (truncate to avoid context explosion)
     completed_questions_info = ""
     if completed_questions:
         completed_questions_info = "# Completed Research Steps\n\n"
         for i, step in enumerate(completed_questions):
+            truncated_res = step.execution_res or ""
+            if len(truncated_res) > 2000:
+                truncated_res = truncated_res[:2000].rstrip() + "..."
             completed_questions_info += f"## Completed Step {i + 1}: {step.question}\n\n"
-            completed_questions_info += f"<finding>\n{step.execution_res}\n</finding>\n\n"
+            completed_questions_info += f"<finding>\n{truncated_res}\n</finding>\n\n"
 
     #prepare the input of the agent 
     agent_input = {
@@ -256,6 +269,7 @@ async def _execute_agent_step(
         )
     
     # Invoke the agent
+    configurable = Configuration.from_runnable_config(config) if config else Configuration()
     default_recursion_limit = 25
     try:
         env_value_str = os.getenv("AGENT_RECURSION_LIMIT", str(default_recursion_limit))
@@ -278,7 +292,23 @@ async def _execute_agent_step(
         )
         recursion_limit = default_recursion_limit
 
-    logger.info(f"Agent input: {agent_input}")
+        # Truncate oversized tool messages to avoid context explosion
+        validated_messages = validate_message_content(agent_input["messages"])
+        for msg in validated_messages:
+            if isinstance(msg, ToolMessage) and isinstance(msg.content, str) and len(msg.content) > 8000:
+                msg.content = msg.content[:8000].rstrip() + "..."
+        agent_input["messages"] = validated_messages
+
+        logger.info(f"Agent input: {agent_input}")
+
+    if agent_name == "researcher":
+        try:
+            researcher_limit = int(getattr(configurable, "researcher_recursion_limit", 12))
+        except (TypeError, ValueError):
+            researcher_limit = 12
+        if researcher_limit > 0:
+            recursion_limit = min(recursion_limit, researcher_limit)
+            logger.info(f"Researcher recursion limit capped to: {recursion_limit}")
     
     # Validate message content before invoking agent
     try:
@@ -294,7 +324,8 @@ async def _execute_agent_step(
         token_count_before = sum(
             len(str(msg.content).split()) for msg in agent_input.get("messages", []) if hasattr(msg, "content")
         )
-        compressed_state = ContextManager(llm_token_limit, preserve_prefix_message_count=3).compress_messages(
+        context_manager = ContextManager(llm_token_limit, preserve_prefix_message_count=3)
+        compressed_state = context_manager.compress_messages(
             {"messages": agent_input["messages"]}
         )
         agent_input["messages"] = compressed_state.get("messages", [])
@@ -305,6 +336,20 @@ async def _execute_agent_step(
             f"Context compression for {agent_name}: {len(compressed_state.get('messages', []))} messages, "
             f"estimated tokens before: ~{token_count_before}, after: ~{token_count_after}"
         )
+
+        # Hard cap enforcement to prevent model context overflow
+        token_count_estimate = context_manager.count_tokens(agent_input["messages"])
+        hard_limit = min(int(llm_token_limit * 0.75), 90000)
+        if token_count_estimate > hard_limit:
+            logger.warning(
+                f"Token estimate {token_count_estimate} exceeds hard limit {hard_limit}. "
+                "Applying aggressive truncation."
+            )
+            agent_input["messages"] = context_manager.enforce_token_budget(
+                agent_input["messages"],
+                hard_limit=hard_limit,
+                max_message_chars=20000,
+            )
 
     try:
         # Use astream (async) from the start to capture messages in real-time

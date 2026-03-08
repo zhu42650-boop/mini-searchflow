@@ -229,13 +229,20 @@ class ContextManager:
                         for item in content_data:
                             if isinstance(item, dict) and "raw_content" in item:
                                 raw_content = item.get("raw_content")
-                                if raw_content and isinstance(raw_content, str) and len(raw_content) > 1024:
-                                    item["raw_content"] = raw_content[:1024]
+                                if raw_content and isinstance(raw_content, str) and len(raw_content) > 512:
+                                    item["raw_content"] = raw_content[:512]
+                                    modified = True
+                            if isinstance(item, dict) and "content" in item:
+                                content = item.get("content")
+                                if content and isinstance(content, str) and len(content) > 1500:
+                                    item["content"] = content[:1500]
                                     modified = True
                         
                         # Update message content with modified data only if changes were made
                         if modified:
                             msg.content = json.dumps(content_data, ensure_ascii=False)
+                    elif isinstance(msg.content, str) and len(msg.content) > 8000:
+                        msg.content = msg.content[:8000]
                 except Exception as e:
                     logger.error(f"Unexpected error during message compression: {e}")
                     continue
@@ -282,6 +289,53 @@ class ContextManager:
         # TODO: summary implementation
         pass
 
+    def enforce_token_budget(
+        self,
+        messages: List[BaseMessage],
+        hard_limit: int,
+        max_message_chars: int = 20000,
+    ) -> List[BaseMessage]:
+        """
+        Aggressively enforce a hard token budget by truncating long messages and
+        dropping oldest context while preserving prefix messages.
+
+        Args:
+            messages: List of messages to trim.
+            hard_limit: Target token cap to enforce.
+            max_message_chars: Max characters per message after truncation.
+
+        Returns:
+            Trimmed list of messages within budget (best effort).
+        """
+        trimmed = copy.deepcopy(messages)
+
+        for msg in trimmed:
+            if not hasattr(msg, "content"):
+                continue
+            if isinstance(msg.content, str) and len(msg.content) > max_message_chars:
+                msg.content = msg.content[:max_message_chars].rstrip() + "..."
+
+        if not self.is_over_limit(trimmed) or self.count_tokens(trimmed) <= hard_limit:
+            return trimmed
+
+        preserved_count = self.preserve_prefix_message_count
+        preserved_messages = trimmed[:preserved_count]
+        remaining_messages = trimmed[preserved_count:]
+
+        result_messages = preserved_messages[:]
+        for msg in reversed(remaining_messages):
+            result_messages.insert(len(preserved_messages), msg)
+            if self.count_tokens(result_messages) <= hard_limit:
+                break
+
+        if self.count_tokens(result_messages) > hard_limit:
+            logger.warning(
+                "Hard token budget enforcement did not fully succeed: "
+                f"{self.count_tokens(result_messages)} > {hard_limit} tokens."
+            )
+
+        return result_messages
+
 
 def validate_message_content(messages: List[BaseMessage], max_content_length: int = 100000) -> List[BaseMessage]:
     """
@@ -303,6 +357,20 @@ def validate_message_content(messages: List[BaseMessage], max_content_length: in
     validated = []
     for i, msg in enumerate(messages):
         try:
+            # Convert raw dict messages into BaseMessage
+            if isinstance(msg, dict):
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                name = msg.get("name")
+                if role == "system":
+                    msg = SystemMessage(content=content)
+                elif role == "assistant":
+                    msg = AIMessage(content=content, name=name)
+                elif role == "tool":
+                    msg = ToolMessage(content=content, name=name or "tool")
+                else:
+                    msg = HumanMessage(content=content, name=name)
+
             # Check if message has content attribute
             if not hasattr(msg, 'content'):
                 logger.warning(f"Message {i} ({type(msg).__name__}) has no content attribute")
@@ -339,4 +407,3 @@ def validate_message_content(messages: List[BaseMessage], max_content_length: in
             validated.append(msg)
     
     return validated
-
