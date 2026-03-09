@@ -61,6 +61,7 @@ export BASIC_MODEL__model="gpt-4o-mini"
 如需启用搜索（推荐）：
 ```bash
 export TAVILY_API_KEY="your_tavily_key"
+export INFOQUEST_API_KEY="your_infoquest_key"
 ```
 
 ### 3) 运行
